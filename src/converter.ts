@@ -1,31 +1,21 @@
 import { Marked, type Renderer, type Tokens } from 'marked';
-import { STYLES, FONT_CODE, SPACER_AFTER_HEADING, SPACER_BEFORE_HEADING, SPACER_BLOCK } from './styles';
+import { STYLES, FONT_CODE } from './styles';
 import { highlightCode } from './highlighter';
 
 function s(tag: string): string {
   return STYLES[tag] ?? '';
 }
 
-/** Wrap content in a table row. This is the core pattern for Outlook spacing. */
-function row(style: string, content: string): string {
-  return `<tr><td style="${style}">${content}</td></tr>\n`;
-}
-
-/** Insert an empty spacer row with a given height. */
-function spacer(px: number): string {
-  return `<tr><td style="padding: ${px}px 0 0 0; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>\n`;
-}
-
 const renderer: Partial<Renderer> = {
   heading({ tokens, depth }: Tokens.Heading): string {
     const tag = `h${depth}`;
     const text = this.parser.parseInline(tokens);
-    return spacer(SPACER_BEFORE_HEADING) + row(s(tag), text) + spacer(SPACER_AFTER_HEADING);
+    return `<${tag} style="${s(tag)}">${text}</${tag}>\n`;
   },
 
   paragraph({ tokens }: Tokens.Paragraph): string {
     const text = this.parser.parseInline(tokens);
-    return row(s('p'), text);
+    return `<p style="${s('p')}">${text}</p>\n`;
   },
 
   strong({ tokens }: Tokens.Strong): string {
@@ -55,21 +45,19 @@ const renderer: Partial<Renderer> = {
     let lines: string;
     if (highlightedLines) {
       // Highlighted: hljs already HTML-escapes the source text.
-      // Each entry contains inline-styled <span> tags for syntax tokens.
       lines = highlightedLines.map(
         (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:10.0pt">${line || '&nbsp;'}</p>`
       ).join('');
     } else {
-      // Fallback: no highlighting, escape manually.
-      // No class=MsoNormal — New Outlook has built-in CSS for MsoNormal that overrides
-      // inline font-family with Calibri. Pure inline styles work for both Classic and New.
+      // No class=MsoNormal — New Outlook resets MsoNormal font-family to Calibri.
+      // Pure inline styles work for both Classic and New Outlook.
       const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       lines = escaped.split('\n').map(
         (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:10.0pt"><span style="font-family:${FONT_CODE};font-size:10.0pt">${line || '&nbsp;'}</span></p>`
       ).join('');
     }
 
-    return `<tr><td style="${s('code-block-td')}">${lines}</td></tr>\n` + spacer(SPACER_BLOCK);
+    return `<div style="${s('code-block')}">${lines}</div>\n`;
   },
 
   codespan({ text }: Tokens.Codespan): string {
@@ -78,19 +66,17 @@ const renderer: Partial<Renderer> = {
   },
 
   blockquote({ tokens }: Tokens.Blockquote): string {
-    // Parse inner tokens but strip table wrappers — blockquote content is inline
     const innerHtml = this.parser.parse(tokens);
-    // Replace inner paragraph styles with blockquote-p style
-    const body = innerHtml.replace(
-      /<tr><td style="[^"]*">(.*?)<\/td><\/tr>/gs,
-      '$1'
-    );
-    return row(s('blockquote'), body) + spacer(SPACER_BLOCK);
+    return `<blockquote style="${s('blockquote')}">${innerHtml}</blockquote>\n`;
   },
 
   list({ ordered, start, items }: Tokens.List): string {
-    let rows = '';
-    items.forEach((item, i) => {
+    const tag = ordered ? 'ol' : 'ul';
+    const isTaskList = items.length > 0 && items.every((it) => it.task);
+    const listStyle = isTaskList ? `${s('list')} list-style: none;` : s('list');
+    const startAttr = ordered && start !== 1 && start !== undefined ? ` start="${start}"` : '';
+
+    const itemsHtml = items.map((item) => {
       // Get inline content from the first paragraph (or text) token
       const firstToken = item.tokens[0];
       const inlineTokens = firstToken?.type === 'paragraph'
@@ -100,23 +86,19 @@ const renderer: Partial<Renderer> = {
 
       // Render any block-level tokens after the first paragraph
       // (nested lists, code blocks, blockquotes, etc.)
-      const blockTokens = item.tokens.slice(firstToken?.type === 'paragraph' || firstToken?.type === 'text' ? 1 : 0);
+      const blockTokens = item.tokens.slice(
+        firstToken?.type === 'paragraph' || firstToken?.type === 'text' ? 1 : 0
+      );
       const nestedContent = blockTokens.length > 0
         ? this.parser.parse(blockTokens)
         : '';
 
-      let bullet: string;
-      if (item.task) {
-        bullet = item.checked ? '&#9745; ' : '&#9744; ';
-      } else if (ordered) {
-        bullet = `${(start ?? 1) + i}. `;
-      } else {
-        bullet = '&#8226; ';
-      }
-      rows += row(s('li'), bullet + body);
-      rows += nestedContent;
-    });
-    return rows + spacer(SPACER_BLOCK);
+      const checkbox = item.task ? (item.checked ? '&#9745; ' : '&#9744; ') : '';
+
+      return `<li style="${s('li')}">${checkbox}${body}${nestedContent}</li>`;
+    }).join('\n');
+
+    return `<${tag} style="${listStyle}"${startAttr}>\n${itemsHtml}\n</${tag}>\n`;
   },
 
   table({ header, rows: tableRows }: Tokens.Table): string {
@@ -137,16 +119,15 @@ const renderer: Partial<Renderer> = {
             return `<td style="${s('td')}${align}">${text}</td>`;
           })
           .join('');
-        return `<tr>${cells}</tr>\n`;
+        return `<tr>${cells}</tr>`;
       })
-      .join('');
+      .join('\n');
 
-    const innerTable = `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="${s('table')}"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>`;
-    return `<tr><td style="padding: 0;">${innerTable}</td></tr>\n` + spacer(SPACER_BLOCK);
+    return `<table cellpadding="0" cellspacing="0" border="0" style="${s('table')}"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>\n`;
   },
 
   hr(_token: Tokens.Hr): string {
-    return `<tr><td style="padding: 0;"><hr style="${s('hr')}" /></td></tr>\n` + spacer(SPACER_BLOCK);
+    return `<hr style="${s('hr')}" />\n`;
   },
 };
 
@@ -158,6 +139,5 @@ function stripFrontmatter(md: string): string {
 }
 
 export function convertMarkdownToStyledHtml(markdown: string): string {
-  const innerRows = marked.parse(stripFrontmatter(markdown)) as string;
-  return `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;border:none;mso-table-lspace:0;mso-table-rspace:0;">${innerRows}</table>`;
+  return marked.parse(stripFrontmatter(markdown)) as string;
 }

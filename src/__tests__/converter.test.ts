@@ -1,62 +1,63 @@
 import { describe, it, expect } from 'vitest';
 import { convertMarkdownToStyledHtml } from '../converter';
 
-/** Helper: extract the inner content of the first <td> in the output */
-function firstTdContent(html: string): string {
-  const m = html.match(/<td style="[^"]*">([\s\S]*?)<\/td>/);
-  return m?.[1] ?? '';
-}
-
-/** Helper: check that output is wrapped in the outer table */
-function expectOuterTable(html: string): void {
-  expect(html).toMatch(/^<table cellpadding="0" cellspacing="0" border="0" width="100%"/);
-  expect(html).toMatch(/<\/table>$/);
-}
-
 describe('convertMarkdownToStyledHtml', () => {
-  describe('outer structure', () => {
-    it('wraps output in a table with Outlook-compatible attributes', () => {
+  describe('output structure', () => {
+    it('produces semantic HTML without an outer table wrapper', () => {
       const html = convertMarkdownToStyledHtml('Hello');
-      expectOuterTable(html);
-      expect(html).toContain('border-collapse:collapse');
-      expect(html).toContain('mso-table-lspace:0');
+      expect(html).not.toMatch(/^<table/);
+      expect(html).toMatch(/^<p style="/);
     });
   });
 
   describe('headings', () => {
-    it('renders h1 with correct font-size', () => {
+    it('renders h1 as <h1> with correct font-size', () => {
       const html = convertMarkdownToStyledHtml('# Title');
+      expect(html).toContain('<h1 style="');
       expect(html).toContain('font-size: 28px');
-      expect(html).toContain('Title');
+      expect(html).toContain('>Title</h1>');
     });
 
-    it('renders h2 with correct font-size', () => {
+    it('renders h2 as <h2> with correct font-size', () => {
       const html = convertMarkdownToStyledHtml('## Subtitle');
+      expect(html).toContain('<h2 style="');
       expect(html).toContain('font-size: 22px');
-      expect(html).toContain('Subtitle');
+      expect(html).toContain('>Subtitle</h2>');
     });
 
-    it('renders h3-h6', () => {
-      expect(convertMarkdownToStyledHtml('### H3')).toContain('font-size: 18px');
-      expect(convertMarkdownToStyledHtml('#### H4')).toContain('font-size: 16px');
-      expect(convertMarkdownToStyledHtml('##### H5')).toContain('font-size: 14px');
-      expect(convertMarkdownToStyledHtml('###### H6')).toContain('font-size: 13px');
+    it('renders h3-h6 as semantic heading tags', () => {
+      expect(convertMarkdownToStyledHtml('### H3')).toMatch(/<h3 style="[^"]*font-size: 18px/);
+      expect(convertMarkdownToStyledHtml('#### H4')).toMatch(/<h4 style="[^"]*font-size: 16px/);
+      expect(convertMarkdownToStyledHtml('##### H5')).toMatch(/<h5 style="[^"]*font-size: 14px/);
+      expect(convertMarkdownToStyledHtml('###### H6')).toMatch(/<h6 style="[^"]*font-size: 13px/);
     });
 
-    it('adds spacer rows around headings', () => {
+    it('uses margin (not spacer rows) for heading spacing', () => {
       const html = convertMarkdownToStyledHtml('# Title');
-      // Should have spacer rows (4px before, 8px after heading)
-      expect(html).toContain('padding: 4px 0 0 0');
-      expect(html).toContain('padding: 8px 0 0 0');
+      expect(html).toContain('margin: 16px 0 8px 0');
+      // No more spacer rows
+      expect(html).not.toContain('<tr><td');
     });
   });
 
   describe('paragraphs', () => {
-    it('renders paragraph in a table row', () => {
+    it('renders paragraph as <p> with margin-based spacing', () => {
       const html = convertMarkdownToStyledHtml('Hello world');
-      expect(html).toContain('<tr><td');
-      expect(html).toContain('Hello world');
+      expect(html).toContain('<p style="');
+      expect(html).toContain('Hello world</p>');
       expect(html).toContain('font-size: 14px');
+      expect(html).toContain('margin: 0 0 8px 0');
+    });
+
+    it('renders multiple paragraphs as separate <p> elements', () => {
+      const html = convertMarkdownToStyledHtml('First para.\n\nSecond para.');
+      const pMatches = html.match(/<p style="[^"]*">/g);
+      expect(pMatches).toHaveLength(2);
+    });
+
+    it('uses Aptos as primary font in paragraph style', () => {
+      const html = convertMarkdownToStyledHtml('Hello');
+      expect(html).toContain('Aptos');
     });
   });
 
@@ -85,8 +86,9 @@ describe('convertMarkdownToStyledHtml', () => {
   });
 
   describe('code blocks', () => {
-    it('renders fenced code block with monospace font stack', () => {
+    it('renders fenced code block wrapped in <div> (not <table>)', () => {
       const html = convertMarkdownToStyledHtml('```\nconst x = 1;\n```');
+      expect(html).toMatch(/<div style="[^"]*background-color: #f6f8fa/);
       expect(html).toContain('font-family:Cascadia Mono, Consolas, Courier New, monospace');
       expect(html).toContain('const x = 1;');
     });
@@ -108,7 +110,7 @@ describe('convertMarkdownToStyledHtml', () => {
       expect(html).toContain('&nbsp;</span>');
     });
 
-    it('has code-block-td with background color and border', () => {
+    it('has code-block container with background color and border', () => {
       const html = convertMarkdownToStyledHtml('```\ncode\n```');
       expect(html).toContain('background-color: #f6f8fa');
       expect(html).toContain('border: 1px solid #d1d5db');
@@ -138,35 +140,44 @@ describe('convertMarkdownToStyledHtml', () => {
   });
 
   describe('lists', () => {
-    it('renders unordered list with bullet character', () => {
+    it('renders unordered list as <ul> with <li> items (native bullets)', () => {
       const html = convertMarkdownToStyledHtml('- Item A\n- Item B');
-      expect(html).toContain('&#8226; Item A');
-      expect(html).toContain('&#8226; Item B');
+      expect(html).toMatch(/<ul style="[^"]*"/);
+      expect(html).toContain('<li style="');
+      expect(html).toContain('Item A');
+      expect(html).toContain('Item B');
+      // No manual bullet characters for non-task lists
+      expect(html).not.toContain('&#8226;');
     });
 
-    it('renders ordered list with numbers', () => {
+    it('renders ordered list as <ol> with <li> items', () => {
       const html = convertMarkdownToStyledHtml('1. First\n2. Second');
-      expect(html).toContain('1. First');
-      expect(html).toContain('2. Second');
+      expect(html).toMatch(/<ol style="[^"]*"/);
+      expect(html).toContain('First');
+      expect(html).toContain('Second');
     });
 
-    it('renders task list with checkboxes', () => {
+    it('renders task list with list-style:none and checkboxes', () => {
       const html = convertMarkdownToStyledHtml('- [x] Done\n- [ ] Todo');
+      expect(html).toContain('list-style: none');
       expect(html).toContain('&#9745; Done');
       expect(html).toContain('&#9744; Todo');
     });
 
-    it('starts ordered list at custom number', () => {
+    it('emits start attribute on ordered list with custom start number', () => {
       const html = convertMarkdownToStyledHtml('5. Fifth\n6. Sixth');
-      expect(html).toContain('5. Fifth');
-      expect(html).toContain('6. Sixth');
+      expect(html).toContain('start="5"');
+      expect(html).toContain('Fifth');
+      expect(html).toContain('Sixth');
     });
 
     it('handles nested unordered list', () => {
       const html = convertMarkdownToStyledHtml('- Parent\n  - Child 1\n  - Child 2');
-      expect(html).toContain('&#8226; Parent');
-      expect(html).toContain('&#8226; Child 1');
-      expect(html).toContain('&#8226; Child 2');
+      expect(html).toContain('Parent');
+      expect(html).toContain('Child 1');
+      expect(html).toContain('Child 2');
+      // Nested <ul> inside <li>
+      expect(html.match(/<ul style="/g)?.length).toBeGreaterThanOrEqual(2);
     });
 
     it('handles nested list with inline formatting', () => {
@@ -195,8 +206,9 @@ describe('convertMarkdownToStyledHtml', () => {
   });
 
   describe('blockquotes', () => {
-    it('renders blockquote with left border', () => {
+    it('renders blockquote as <blockquote> with left border', () => {
       const html = convertMarkdownToStyledHtml('> Quote text');
+      expect(html).toContain('<blockquote style="');
       expect(html).toContain('border-left: 4px solid');
       expect(html).toContain('Quote text');
     });
@@ -275,25 +287,21 @@ describe('convertMarkdownToStyledHtml', () => {
   describe('syntax highlighting', () => {
     it('highlights TypeScript keywords with color', () => {
       const html = convertMarkdownToStyledHtml('```typescript\nconst x = 42;\n```');
-      // "const" keyword → red
       expect(html).toContain('color:#d73a49');
     });
 
     it('highlights number literals', () => {
       const html = convertMarkdownToStyledHtml('```javascript\nconst x = 42;\n```');
-      // 42 → blue
       expect(html).toContain('color:#005cc5');
     });
 
     it('highlights string literals', () => {
       const html = convertMarkdownToStyledHtml('```javascript\nconst s = "hello";\n```');
-      // string → dark blue
       expect(html).toContain('color:#032f62');
     });
 
     it('highlights function names', () => {
       const html = convertMarkdownToStyledHtml('```javascript\nfunction hello() {}\n```');
-      // function name → purple
       expect(html).toContain('color:#6f42c1');
     });
 
@@ -316,7 +324,7 @@ describe('convertMarkdownToStyledHtml', () => {
       expect(pTags).toHaveLength(2);
     });
 
-    it('uses code-block-td style for highlighted blocks', () => {
+    it('uses code-block container for highlighted blocks', () => {
       const html = convertMarkdownToStyledHtml('```typescript\nconst x = 1;\n```');
       expect(html).toContain('background-color: #f6f8fa');
       expect(html).toContain('border: 1px solid #d1d5db');
@@ -324,9 +332,7 @@ describe('convertMarkdownToStyledHtml', () => {
 
     it('handles multi-line comments', () => {
       const html = convertMarkdownToStyledHtml('```javascript\n/* comment\nline 2 */\n```');
-      // Comment color should appear
       expect(html).toContain('color:#6a737d');
-      // Each line should be in its own <p> tag
       const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10\.0pt">/g);
       expect(pTags).toHaveLength(2);
     });
@@ -345,12 +351,12 @@ describe('convertMarkdownToStyledHtml', () => {
   describe('edge cases', () => {
     it('handles empty input', () => {
       const html = convertMarkdownToStyledHtml('');
-      expectOuterTable(html);
+      expect(html).toBe('');
     });
 
     it('handles whitespace-only input', () => {
       const html = convertMarkdownToStyledHtml('   \n\n   ');
-      expectOuterTable(html);
+      expect(typeof html).toBe('string');
     });
   });
 });
