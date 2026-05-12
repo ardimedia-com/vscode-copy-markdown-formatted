@@ -14,22 +14,22 @@ describe('convertMarkdownToStyledHtml', () => {
     it('renders h1 as <h1> with correct font-size', () => {
       const html = convertMarkdownToStyledHtml('# Title');
       expect(html).toContain('<h1 style="');
-      expect(html).toContain('font-size: 28px');
+      expect(html).toContain('font-size: 24pt');
       expect(html).toContain('>Title</h1>');
     });
 
     it('renders h2 as <h2> with correct font-size', () => {
       const html = convertMarkdownToStyledHtml('## Subtitle');
       expect(html).toContain('<h2 style="');
-      expect(html).toContain('font-size: 22px');
+      expect(html).toContain('font-size: 18pt');
       expect(html).toContain('>Subtitle</h2>');
     });
 
     it('renders h3-h6 as semantic heading tags', () => {
-      expect(convertMarkdownToStyledHtml('### H3')).toMatch(/<h3 style="[^"]*font-size: 18px/);
-      expect(convertMarkdownToStyledHtml('#### H4')).toMatch(/<h4 style="[^"]*font-size: 16px/);
-      expect(convertMarkdownToStyledHtml('##### H5')).toMatch(/<h5 style="[^"]*font-size: 14px/);
-      expect(convertMarkdownToStyledHtml('###### H6')).toMatch(/<h6 style="[^"]*font-size: 13px/);
+      expect(convertMarkdownToStyledHtml('### H3')).toMatch(/<h3 style="[^"]*font-size: 16pt/);
+      expect(convertMarkdownToStyledHtml('#### H4')).toMatch(/<h4 style="[^"]*font-size: 14pt/);
+      expect(convertMarkdownToStyledHtml('##### H5')).toMatch(/<h5 style="[^"]*font-size: 13pt/);
+      expect(convertMarkdownToStyledHtml('###### H6')).toMatch(/<h6 style="[^"]*font-size: 12pt/);
     });
 
     it('uses margin (not spacer rows) for heading spacing', () => {
@@ -45,7 +45,7 @@ describe('convertMarkdownToStyledHtml', () => {
       const html = convertMarkdownToStyledHtml('Hello world');
       expect(html).toContain('<p style="');
       expect(html).toContain('Hello world</p>');
-      expect(html).toContain('font-size: 14px');
+      expect(html).toContain('font-size: 12pt');
       expect(html).toContain('margin: 0 0 8px 0');
     });
 
@@ -95,7 +95,7 @@ describe('convertMarkdownToStyledHtml', () => {
 
     it('wraps each line in a <p> with inline font-family', () => {
       const html = convertMarkdownToStyledHtml('```\nline1\nline2\n```');
-      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10\.0pt">/g);
+      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10pt">/g);
       expect(pTags).toHaveLength(2);
     });
 
@@ -142,7 +142,7 @@ describe('convertMarkdownToStyledHtml', () => {
   describe('lists', () => {
     it('renders unordered list as <ul> with <li> items (native bullets)', () => {
       const html = convertMarkdownToStyledHtml('- Item A\n- Item B');
-      expect(html).toMatch(/<ul style="[^"]*"/);
+      expect(html).toMatch(/<ul style="[^"]*font-size: 12pt[^"]*"/);
       expect(html).toContain('<li style="');
       expect(html).toContain('Item A');
       expect(html).toContain('Item B');
@@ -219,8 +219,8 @@ describe('convertMarkdownToStyledHtml', () => {
       const html = convertMarkdownToStyledHtml('| A | B |\n|---|---|\n| 1 | 2 |');
       expect(html).toContain('<thead>');
       expect(html).toContain('<tbody>');
-      expect(html).toContain('<th style="');
-      expect(html).toContain('<td style="');
+      expect(html).toMatch(/<th style="[^"]*font-size: 12pt[^"]*"/);
+      expect(html).toMatch(/<td style="[^"]*font-size: 12pt[^"]*"/);
     });
 
     it('renders header cells with background color', () => {
@@ -320,7 +320,7 @@ describe('convertMarkdownToStyledHtml', () => {
 
     it('wraps each highlighted line in <p> with monospace font stack', () => {
       const html = convertMarkdownToStyledHtml('```typescript\nconst a = 1;\nconst b = 2;\n```');
-      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10\.0pt">/g);
+      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10pt">/g);
       expect(pTags).toHaveLength(2);
     });
 
@@ -333,7 +333,7 @@ describe('convertMarkdownToStyledHtml', () => {
     it('handles multi-line comments', () => {
       const html = convertMarkdownToStyledHtml('```javascript\n/* comment\nline 2 */\n```');
       expect(html).toContain('color:#6a737d');
-      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10\.0pt">/g);
+      const pTags = html.match(/<p style="margin:0;font-family:Cascadia Mono, Consolas, Courier New, monospace;font-size:10pt">/g);
       expect(pTags).toHaveLength(2);
     });
 

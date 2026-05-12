@@ -1,5 +1,5 @@
 import { Marked, type Renderer, type Tokens } from 'marked';
-import { STYLES, FONT_CODE } from './styles';
+import { STYLES, FONT_CODE, FONT_SIZE_CODE } from './styles';
 import { highlightCode } from './highlighter';
 
 function s(tag: string): string {
@@ -46,14 +46,14 @@ const renderer: Partial<Renderer> = {
     if (highlightedLines) {
       // Highlighted: hljs already HTML-escapes the source text.
       lines = highlightedLines.map(
-        (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:10.0pt">${line || '&nbsp;'}</p>`
+        (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:${FONT_SIZE_CODE}">${line || '&nbsp;'}</p>`
       ).join('');
     } else {
       // No class=MsoNormal — New Outlook resets MsoNormal font-family to Calibri.
       // Pure inline styles work for both Classic and New Outlook.
       const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       lines = escaped.split('\n').map(
-        (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:10.0pt"><span style="font-family:${FONT_CODE};font-size:10.0pt">${line || '&nbsp;'}</span></p>`
+        (line) => `<p style="margin:0;font-family:${FONT_CODE};font-size:${FONT_SIZE_CODE}"><span style="font-family:${FONT_CODE};font-size:${FONT_SIZE_CODE}">${line || '&nbsp;'}</span></p>`
       ).join('');
     }
 

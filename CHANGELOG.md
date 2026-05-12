@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- Font sizes switched from `px` to `pt` to match Outlook/Word conventions — body is now 12pt (Outlook default), headings scale 24/18/16/14/13/12pt (h1–h6). User-visible effect: pasted output renders about 14% larger than in 0.2.0
+- Code-block font size is now a single `FONT_SIZE_CODE` constant shared between `styles.ts` and `converter.ts` (was duplicated as `10pt` / `10.0pt`)
+
 ## 0.2.0
 
 **Breaking:** HTML output structure changed from a single outer `<table>` with `<tr><td>` per block to semantic HTML. This is the new default behavior — there is no opt-in setting or fallback to the previous table-based layout.

@@ -39,16 +39,20 @@ Two options:
 
 | Markdown | Rendered as |
 |---|---|
-| `# Heading` | Styled headings (H1-H6) |
-| `**bold**` | **Bold text** |
-| `*italic*` | *Italic text* |
-| `` `code` `` | Inline code with background and syntax coloring |
-| Code blocks | Dark-themed code blocks |
+| `# Heading` | Styled headings (H1–H6) |
+| `**bold**` / `*italic*` | Bold and italic text |
+| `` `code` `` | Inline code with background |
+| ```` ```lang ```` | Fenced code blocks with syntax highlighting (highlight.js, GitHub light theme) |
 | `> Quote` | Styled blockquotes |
 | Tables | Bordered tables with header styling |
-| Lists | Ordered and unordered lists |
+| `- item` / `1. item` | Unordered and ordered lists (with custom `start` number) |
+| `- [x] / - [ ]` | Task lists with checkbox characters |
 | `[link](url)` | Clickable links |
+| `![alt](url)` | Inline images (external URLs only — see Known Limitations) |
 | `---` | Horizontal rules |
+| `--- ... ---` frontmatter | YAML frontmatter is stripped automatically |
+
+Body text uses the **Aptos** font at **12pt** (with `Segoe UI` / `Calibri` / `Arial` fallbacks) to match the default font and size of new Outlook / Microsoft 365.
 
 ## Platform Support
 
