@@ -2,7 +2,7 @@ name: Publish to Marketplace
 
 on:
   push:
-    branches: [main]
+    tags: ['v*']
 
 permissions:
   contents: write
@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -32,49 +30,34 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Check if version is new
-        id: check
+      - name: Verify tag matches package.json version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists — skipping publish"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "New version detected: v$VERSION"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
           fi
+          echo "Version match: $PKG_VERSION"
 
       - name: Package VSIX
-        if: steps.check.outputs.skip == 'false'
         run: npx vsce package
 
       - name: Find VSIX
-        if: steps.check.outputs.skip == 'false'
         id: vsix
         run: |
           VSIX_PATH=$(ls *.vsix | head -1)
           echo "path=$VSIX_PATH" >> "$GITHUB_OUTPUT"
           echo "Found VSIX: $VSIX_PATH"
 
-      - name: Create git tag
-        if: steps.check.outputs.skip == 'false'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.check.outputs.version }}"
-          git push origin "v${{ steps.check.outputs.version }}"
-
       - name: Create GitHub Release
-        if: steps.check.outputs.skip == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v${{ steps.check.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
           files: ${{ steps.vsix.outputs.path }}
           generate_release_notes: true
 
       - name: Publish to VS Code Marketplace
-        if: steps.check.outputs.skip == 'false'
         run: npx vsce publish --packagePath ${{ steps.vsix.outputs.path }} --pat $VSCE_PAT
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
