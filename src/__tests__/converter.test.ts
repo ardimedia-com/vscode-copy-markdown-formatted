@@ -206,11 +206,49 @@ describe('convertMarkdownToStyledHtml', () => {
   });
 
   describe('blockquotes', () => {
-    it('renders blockquote as <blockquote> with left border', () => {
-      const html = convertMarkdownToStyledHtml('> Quote text');
+    it('renders blockquote as <blockquote> with left border when stripBlockquote is off', () => {
+      const html = convertMarkdownToStyledHtml('> Quote text', { stripBlockquote: false });
       expect(html).toContain('<blockquote style="');
       expect(html).toContain('border-left: 4px solid');
       expect(html).toContain('Quote text');
+    });
+  });
+
+  describe('stripBlockquote', () => {
+    it('strips leading "> " from every line when the entire input is a blockquote (default on)', () => {
+      const md = '> Line one\n>\n> Line two';
+      const html = convertMarkdownToStyledHtml(md);
+      expect(html).not.toContain('<blockquote');
+      expect(html).toContain('Line one');
+      expect(html).toContain('Line two');
+    });
+
+    it('renders as blockquote when stripBlockquote is explicitly disabled', () => {
+      const md = '> Line one\n>\n> Line two';
+      const html = convertMarkdownToStyledHtml(md, { stripBlockquote: false });
+      expect(html).toContain('<blockquote');
+    });
+
+    it('does not strip when only some lines start with ">"', () => {
+      const md = '> quoted line\n\nNormal paragraph.';
+      const html = convertMarkdownToStyledHtml(md);
+      expect(html).toContain('<blockquote');
+      expect(html).toContain('Normal paragraph.');
+    });
+
+    it('strips one level so nested quotes remain a blockquote', () => {
+      const md = '> > inner';
+      const html = convertMarkdownToStyledHtml(md);
+      expect(html).toContain('<blockquote');
+      expect(html).toContain('inner');
+    });
+
+    it('strips real-world Outlook reply pattern', () => {
+      const md = '> Guten Tag Herr Spray\n>\n> Besten Dank für die Einladung.\n>\n> Freundliche Grüsse';
+      const html = convertMarkdownToStyledHtml(md);
+      expect(html).not.toContain('<blockquote');
+      const pMatches = html.match(/<p style="[^"]*">/g);
+      expect(pMatches?.length).toBeGreaterThanOrEqual(3);
     });
   });
 

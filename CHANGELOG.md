@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- New **settings** (configuration contribution): font family + size for body and code, and a `stripBlockquote` toggle. Defaults match the previous hard-coded values (Aptos 11pt, Cascadia Mono 10pt)
+- New behavior: if every non-empty line of the input starts with `>` (e.g. an Outlook reply copied as Markdown), one level of blockquote marker is stripped before conversion. Renders as normal paragraphs instead of a styled blockquote. Controlled by `copyMarkdownFormatted.stripBlockquote` (default `true`). Strips one level only, so nested quotes remain a blockquote
+- New command **"Markdown: Configure Copy Formatted…"** opens VS Code Settings filtered to this extension. Added as a third entry in the editor context menu next to the two existing copy commands
+- Heading sizes now scale from `font.bodySize` instead of being hard-coded (h1 = body + 13pt, h2 = body + 7pt, h3 = body + 5pt, h4 = body + 3pt, h5 = body + 2pt, h6 = body + 1pt). With the default body size of 11pt, the rendered sizes are unchanged from 0.2.2
+- Refactored `styles.ts` from a static `STYLES` record to a `buildStyles(config)` factory so the converter can be parameterised at runtime
+
 ## 0.2.2
 
 - Body font size changed from 12pt to 11pt to match the actual new Outlook / Microsoft 365 default (Aptos 11pt). Applies to paragraphs, lists, and table cells; headings and code blocks unchanged. h6 stays at 12pt so it remains one step above body text

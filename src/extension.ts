@@ -1,6 +1,17 @@
 import * as vscode from 'vscode';
-import { convertMarkdownToStyledHtml } from './converter';
+import { convertMarkdownToStyledHtml, type ConvertOptions } from './converter';
 import { copyHtmlToClipboard } from './clipboard';
+
+function readConvertOptions(): ConvertOptions {
+  const cfg = vscode.workspace.getConfiguration('copyMarkdownFormatted');
+  return {
+    stripBlockquote: cfg.get<boolean>('stripBlockquote', true),
+    fontBody: cfg.get<string>('font.body', "Aptos, 'Segoe UI', Calibri, Arial, sans-serif"),
+    fontBodySize: cfg.get<number>('font.bodySize', 11),
+    fontCode: cfg.get<string>('font.code', 'Cascadia Mono, Consolas, Courier New, monospace'),
+    fontCodeSize: cfg.get<number>('font.codeSize', 10),
+  };
+}
 
 function buildClipboardErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
@@ -37,7 +48,7 @@ async function copyFormatted(text: string): Promise<void> {
   }
 
   try {
-    const html = convertMarkdownToStyledHtml(text);
+    const html = convertMarkdownToStyledHtml(text, readConvertOptions());
     await copyHtmlToClipboard(html, text);
     vscode.window.showInformationMessage('Formatted Markdown copied to clipboard.');
   } catch (err: unknown) {
@@ -69,6 +80,13 @@ export function activate(context: vscode.ExtensionContext): void {
       }
       const text = editor.document.getText();
       await copyFormatted(text);
+    }),
+
+    vscode.commands.registerCommand('copyMarkdownFormatted.openSettings', async () => {
+      await vscode.commands.executeCommand(
+        'workbench.action.openSettings',
+        '@ext:ardimedia.copy-markdown-formatted'
+      );
     })
   );
 }

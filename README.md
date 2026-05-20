@@ -6,10 +6,11 @@ Copy Markdown as **formatted HTML** to the clipboard. Paste it into Outlook, Tea
 
 - **Copy Selection as Formatted HTML** — select text in a Markdown file and copy it with formatting
 - **Copy File as Formatted HTML** — copy the entire Markdown file with formatting
+- **Configure Copy Formatted…** — opens the settings filtered to this extension
 
-Both commands are available via:
+All three commands are available via:
 - **Right-click context menu** (in Markdown files)
-- **Command Palette** (`Ctrl+Shift+P` > "Markdown: Copy ...")
+- **Command Palette** (`Ctrl+Shift+P` > "Markdown: ...")
 
 ## Usage
 
@@ -52,7 +53,19 @@ Two options:
 | `---` | Horizontal rules |
 | `--- ... ---` frontmatter | YAML frontmatter is stripped automatically |
 
-Body text uses the **Aptos** font at **11pt** (with `Segoe UI` / `Calibri` / `Arial` fallbacks) to match the default font and size of new Outlook / Microsoft 365.
+Body text uses the **Aptos** font at **11pt** (with `Segoe UI` / `Calibri` / `Arial` fallbacks) to match the default font and size of new Outlook / Microsoft 365. Fonts and sizes are configurable — see [Settings](#settings).
+
+## Settings
+
+Open via the command **"Markdown: Configure Copy Formatted…"** or VS Code Settings (filter `@ext:ardimedia.copy-markdown-formatted`):
+
+| Setting | Default | Description |
+|---|---|---|
+| `copyMarkdownFormatted.stripBlockquote` | `true` | If every non-empty line starts with `>` (e.g. quoted email reply), strip one level of blockquote marker before converting. Renders as normal paragraphs instead of a blockquote. |
+| `copyMarkdownFormatted.font.body` | `Aptos, 'Segoe UI', Calibri, Arial, sans-serif` | Font family stack for body text, headings, lists, and tables. |
+| `copyMarkdownFormatted.font.bodySize` | `11` | Body font size in points. Headings scale automatically (h1 = body + 13pt down to h6 = body + 1pt). |
+| `copyMarkdownFormatted.font.code` | `Cascadia Mono, Consolas, Courier New, monospace` | Font family stack for inline code and fenced code blocks. |
+| `copyMarkdownFormatted.font.codeSize` | `10` | Code font size in points. |
 
 ## Platform Support
 

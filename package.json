@@ -2,7 +2,7 @@
   "name": "copy-markdown-formatted",
   "displayName": "Copy Markdown Formatted",
   "description": "Copy Markdown as formatted HTML to clipboard — paste with full styling into Outlook, Teams, and other rich text editors.",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "ardimedia",
   "license": "MIT",
   "repository": {
@@ -40,6 +40,11 @@
         "command": "copyMarkdownFormatted.copyFile",
         "title": "Copy File as Formatted HTML",
         "category": "Markdown"
+      },
+      {
+        "command": "copyMarkdownFormatted.openSettings",
+        "title": "Configure Copy Formatted...",
+        "category": "Markdown"
       }
     ],
     "menus": {
@@ -53,6 +58,11 @@
           "command": "copyMarkdownFormatted.copyFile",
           "when": "editorLangId == markdown",
           "group": "9_cutcopypaste@11"
+        },
+        {
+          "command": "copyMarkdownFormatted.openSettings",
+          "when": "editorLangId == markdown",
+          "group": "9_cutcopypaste@12"
         }
       ],
       "commandPalette": [
@@ -63,8 +73,45 @@
         {
           "command": "copyMarkdownFormatted.copyFile",
           "when": "editorLangId == markdown"
+        },
+        {
+          "command": "copyMarkdownFormatted.openSettings"
         }
       ]
+    },
+    "configuration": {
+      "title": "Copy Markdown Formatted",
+      "properties": {
+        "copyMarkdownFormatted.stripBlockquote": {
+          "type": "boolean",
+          "default": true,
+          "description": "If every non-empty line of the input starts with '>' (e.g. quoted email reply), strip one level of blockquote marker before converting to HTML. Useful when pasting Outlook reply text — renders as normal paragraphs instead of a blockquote."
+        },
+        "copyMarkdownFormatted.font.body": {
+          "type": "string",
+          "default": "Aptos, 'Segoe UI', Calibri, Arial, sans-serif",
+          "description": "Font family stack for body text, headings, lists, and tables. Use a comma-separated CSS font-family value with fallbacks (e.g. \"Aptos, 'Segoe UI', Calibri, Arial, sans-serif\")."
+        },
+        "copyMarkdownFormatted.font.bodySize": {
+          "type": "number",
+          "default": 11,
+          "minimum": 6,
+          "maximum": 32,
+          "description": "Body font size in points. Headings scale automatically from this value (h1 = body + 13pt, h2 = body + 7pt, h3 = body + 5pt, h4 = body + 3pt, h5 = body + 2pt, h6 = body + 1pt). Outlook / Microsoft 365 default is 11."
+        },
+        "copyMarkdownFormatted.font.code": {
+          "type": "string",
+          "default": "Cascadia Mono, Consolas, Courier New, monospace",
+          "description": "Font family stack for inline code and fenced code blocks. Use a comma-separated CSS font-family value with fallbacks."
+        },
+        "copyMarkdownFormatted.font.codeSize": {
+          "type": "number",
+          "default": 10,
+          "minimum": 6,
+          "maximum": 32,
+          "description": "Code font size in points (applies to inline code and fenced code blocks)."
+        }
+      }
     }
   },
   "scripts": {
