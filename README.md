@@ -52,7 +52,7 @@ Two options:
 | `---` | Horizontal rules |
 | `--- ... ---` frontmatter | YAML frontmatter is stripped automatically |
 
-Body text uses the **Aptos** font at **12pt** (with `Segoe UI` / `Calibri` / `Arial` fallbacks) to match the default font and size of new Outlook / Microsoft 365.
+Body text uses the **Aptos** font at **11pt** (with `Segoe UI` / `Calibri` / `Arial` fallbacks) to match the default font and size of new Outlook / Microsoft 365.
 
 ## Platform Support
 

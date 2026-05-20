@@ -1,4 +1,5 @@
 const FONT_BODY = "Aptos, 'Segoe UI', Calibri, Arial, sans-serif";
+const FONT_SIZE_BODY = '11pt';
 export const FONT_CODE = 'Cascadia Mono, Consolas, Courier New, monospace';
 export const FONT_SIZE_CODE = '10pt';
 const COLOR_TEXT = '#1f2937';
@@ -18,18 +19,18 @@ export const STYLES: Record<string, string> = {
   h4: `font-family: ${FONT_BODY}; font-size: 14pt; font-weight: 600; color: ${COLOR_TEXT}; margin: 10px 0 2px 0;`,
   h5: `font-family: ${FONT_BODY}; font-size: 13pt; font-weight: 600; color: ${COLOR_TEXT}; margin: 8px 0 2px 0;`,
   h6: `font-family: ${FONT_BODY}; font-size: 12pt; font-weight: 600; color: ${COLOR_MUTED}; margin: 8px 0 2px 0;`,
-  p: `font-family: ${FONT_BODY}; font-size: 12pt; line-height: 1.6; color: ${COLOR_TEXT_LIGHT}; margin: 0 0 8px 0;`,
+  p: `font-family: ${FONT_BODY}; font-size: ${FONT_SIZE_BODY}; line-height: 1.6; color: ${COLOR_TEXT_LIGHT}; margin: 0 0 8px 0;`,
   a: `color: ${COLOR_LINK}; text-decoration: none;`,
   strong: `font-weight: 600;`,
   em: `font-style: italic;`,
   code: `font-family: ${FONT_CODE}; background-color: ${COLOR_BG_LIGHT}; color: ${COLOR_TEXT}; padding: 2px 6px;`,
   'code-block': `background-color: ${COLOR_CODE_BG}; padding: 16px; border: 1px solid ${COLOR_BORDER}; font-family: ${FONT_CODE}; font-size: ${FONT_SIZE_CODE}; color: ${COLOR_CODE_FG}; line-height: 1.6; margin: 0 0 8px 0;`,
   blockquote: `border-left: 4px solid ${COLOR_BORDER}; padding: 4px 0 4px 16px; margin: 0 0 8px 0; color: ${COLOR_MUTED};`,
-  list: `font-family: ${FONT_BODY}; font-size: 12pt; color: ${COLOR_TEXT_LIGHT}; line-height: 1.6; margin: 0 0 8px 0; padding-left: 24px;`,
+  list: `font-family: ${FONT_BODY}; font-size: ${FONT_SIZE_BODY}; color: ${COLOR_TEXT_LIGHT}; line-height: 1.6; margin: 0 0 8px 0; padding-left: 24px;`,
   li: `margin: 0 0 4px 0;`,
   table: `border-collapse: collapse; width: 100%; margin: 0 0 8px 0;`,
-  th: `background-color: ${COLOR_BG_LIGHT}; padding: 8px 12px; font-weight: 600; border: 1px solid ${COLOR_BORDER}; text-align: left; font-family: ${FONT_BODY}; font-size: 12pt;`,
-  td: `padding: 8px 12px; border: 1px solid ${COLOR_BORDER}; font-family: ${FONT_BODY}; font-size: 12pt;`,
+  th: `background-color: ${COLOR_BG_LIGHT}; padding: 8px 12px; font-weight: 600; border: 1px solid ${COLOR_BORDER}; text-align: left; font-family: ${FONT_BODY}; font-size: ${FONT_SIZE_BODY};`,
+  td: `padding: 8px 12px; border: 1px solid ${COLOR_BORDER}; font-family: ${FONT_BODY}; font-size: ${FONT_SIZE_BODY};`,
   hr: `border: none; border-top: 1px solid ${COLOR_BORDER}; margin: 8px 0;`,
   img: `max-width: 100%; height: auto;`,
 };

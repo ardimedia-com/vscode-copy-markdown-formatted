@@ -45,7 +45,7 @@ describe('convertMarkdownToStyledHtml', () => {
       const html = convertMarkdownToStyledHtml('Hello world');
       expect(html).toContain('<p style="');
       expect(html).toContain('Hello world</p>');
-      expect(html).toContain('font-size: 12pt');
+      expect(html).toContain('font-size: 11pt');
       expect(html).toContain('margin: 0 0 8px 0');
     });
 
@@ -142,7 +142,7 @@ describe('convertMarkdownToStyledHtml', () => {
   describe('lists', () => {
     it('renders unordered list as <ul> with <li> items (native bullets)', () => {
       const html = convertMarkdownToStyledHtml('- Item A\n- Item B');
-      expect(html).toMatch(/<ul style="[^"]*font-size: 12pt[^"]*"/);
+      expect(html).toMatch(/<ul style="[^"]*font-size: 11pt[^"]*"/);
       expect(html).toContain('<li style="');
       expect(html).toContain('Item A');
       expect(html).toContain('Item B');
@@ -219,8 +219,8 @@ describe('convertMarkdownToStyledHtml', () => {
       const html = convertMarkdownToStyledHtml('| A | B |\n|---|---|\n| 1 | 2 |');
       expect(html).toContain('<thead>');
       expect(html).toContain('<tbody>');
-      expect(html).toMatch(/<th style="[^"]*font-size: 12pt[^"]*"/);
-      expect(html).toMatch(/<td style="[^"]*font-size: 12pt[^"]*"/);
+      expect(html).toMatch(/<th style="[^"]*font-size: 11pt[^"]*"/);
+      expect(html).toMatch(/<td style="[^"]*font-size: 11pt[^"]*"/);
     });
 
     it('renders header cells with background color', () => {

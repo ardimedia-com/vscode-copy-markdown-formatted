@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Body font size changed from 12pt to 11pt to match the actual new Outlook / Microsoft 365 default (Aptos 11pt). Applies to paragraphs, lists, and table cells; headings and code blocks unchanged. h6 stays at 12pt so it remains one step above body text
+- Extracted body font size into a shared `FONT_SIZE_BODY` constant in `styles.ts` (mirrors the existing `FONT_SIZE_CODE`)
+
 ## 0.2.1
 
 - Font sizes switched from `px` to `pt` to match Outlook/Word conventions — body is now 12pt (Outlook default), headings scale 24/18/16/14/13/12pt (h1–h6). User-visible effect: pasted output renders about 14% larger than in 0.2.0
