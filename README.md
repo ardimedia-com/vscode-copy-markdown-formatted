@@ -19,6 +19,8 @@ All three commands are available via:
 3. Right-click and choose **"Copy Selection as Formatted HTML"** or **"Copy File as Formatted HTML"**
 4. Paste into Outlook, Teams, Word, or any application that accepts rich text (`Ctrl+V`)
 
+To change fonts, sizes, or the blockquote-stripping behavior, use **"Configure Copy Formatted…"** from the same context menu (see [Settings](#settings)).
+
 The pasted content will include styled headings, bold/italic text, code blocks, tables, lists, blockquotes, and links.
 
 ## Paste as **"Keep Source Formatting"**
@@ -44,7 +46,7 @@ Two options:
 | `**bold**` / `*italic*` | Bold and italic text |
 | `` `code` `` | Inline code with background |
 | ```` ```lang ```` | Fenced code blocks with syntax highlighting (highlight.js, GitHub light theme) |
-| `> Quote` | Styled blockquotes |
+| `> Quote` | Styled blockquotes (or stripped to normal paragraphs when the entire input is quoted — see `stripBlockquote` in [Settings](#settings)) |
 | Tables | Bordered tables with header styling |
 | `- item` / `1. item` | Unordered and ordered lists (with custom `start` number) |
 | `- [x] / - [ ]` | Task lists with checkbox characters |

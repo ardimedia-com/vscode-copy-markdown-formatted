@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Docs: README "Supported Elements" table now notes that `> Quote` may be stripped to normal paragraphs when the entire input is quoted (default `stripBlockquote` behavior introduced in 0.3.0)
+- Docs: README Usage section now references the new "Configure Copy Formatted…" command
+
 ## 0.3.0
 
 - New **settings** (configuration contribution): font family + size for body and code, and a `stripBlockquote` toggle. Defaults match the previous hard-coded values (Aptos 11pt, Cascadia Mono 10pt)
