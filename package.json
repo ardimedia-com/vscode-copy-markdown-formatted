@@ -124,7 +124,7 @@
   "devDependencies": {
     "@types/node": "^20.19.41",
     "@types/vscode": "^1.85.0",
-    "esbuild": "^0.28.0",
+    "esbuild": "^0.28.1",
     "vitest": "^4.1.6"
   },
   "dependencies": {
