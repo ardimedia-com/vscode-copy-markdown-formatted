@@ -68,12 +68,13 @@ Open via the command **"Markdown: Configure Copy Formatted…"** or VS Code Sett
 | `copyMarkdownFormatted.font.bodySize` | `11` | Body font size in points. Headings scale automatically (h1 = body + 13pt down to h6 = body + 1pt). |
 | `copyMarkdownFormatted.font.code` | `Cascadia Mono, Consolas, Courier New, monospace` | Font family stack for inline code and fenced code blocks. |
 | `copyMarkdownFormatted.font.codeSize` | `10` | Code font size in points. |
+| `copyMarkdownFormatted.windows.clipboardMode` | `persistentHost` | **Windows only.** `persistentHost` keeps a background PowerShell process ready so copies after the first are near-instant; `oneShot` starts a fresh PowerShell per copy (slower, no background process). |
 
 ## Platform Support
 
 | Platform | Status | Clipboard tool |
 |---|---|---|
-| Windows | Supported | PowerShell (built-in) |
+| Windows | Supported | PowerShell 7 (`pwsh`) if installed, else Windows PowerShell (built-in) |
 | macOS | Supported | Swift (built-in) |
 | Linux (X11) | Supported | `xclip` (install: `sudo apt install xclip`) |
 | Linux (Wayland) | Supported | `wl-copy` (install: `sudo apt install wl-clipboard`) |
@@ -81,7 +82,7 @@ Open via the command **"Markdown: Configure Copy Formatted…"** or VS Code Sett
 ## Requirements
 
 - VS Code 1.85.0 or newer
-- **Windows**: PowerShell (pre-installed)
+- **Windows**: Windows PowerShell (pre-installed). PowerShell 7 (`pwsh`) is used automatically when installed — clipboard copies are noticeably faster with it
 - **macOS**: Swift runtime (pre-installed with Xcode CLI tools)
 - **Linux**: `xclip` (X11) or `wl-clipboard` (Wayland)
 

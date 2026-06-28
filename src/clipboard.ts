@@ -13,9 +13,26 @@ export function wrapHtml(htmlFragment: string): string {
 // Platform dispatcher
 // ---------------------------------------------------------------------------
 
-export async function copyHtmlToClipboard(html: string, plainText: string): Promise<void> {
+/**
+ * How the Windows clipboard write runs:
+ *  - `'persistentHost'` keeps a background PowerShell ready so copies after the
+ *    first are near-instant (default).
+ *  - `'oneShot'` spawns a fresh PowerShell per copy (slower, no background
+ *    process).
+ */
+export type WindowsClipboardMode = 'persistentHost' | 'oneShot';
+
+export interface CopyOptions {
+  windowsClipboardMode?: WindowsClipboardMode;
+}
+
+export async function copyHtmlToClipboard(
+  html: string,
+  plainText: string,
+  options: CopyOptions = {}
+): Promise<void> {
   switch (process.platform) {
-    case 'win32':  return copyWindows(html, plainText);
+    case 'win32':  return copyWindows(html, plainText, options.windowsClipboardMode ?? 'persistentHost');
     case 'darwin': return copyMacOS(html, plainText);
     case 'linux':  return copyLinux(html, plainText);
     default:
@@ -84,57 +101,444 @@ export function buildCfHtml(htmlFragment: string): string {
 }
 
 /**
- * Copy HTML to Windows clipboard as both CF_HTML and plain text.
- * Uses PowerShell with .NET System.Windows.Forms.Clipboard.
+ * Resolved PowerShell host, cached for the session.
  *
- * Key: CF_HTML data must be passed as a raw UTF-8 byte MemoryStream,
- * not as a string — otherwise .NET may prepend a BOM which corrupts
- * the byte offsets in the CF_HTML header.
+ * PowerShell 7 (`pwsh`) is preferred over Windows PowerShell 5.1
+ * (`powershell.exe`): loading System.Windows.Forms — which the clipboard
+ * write needs — costs ~0.8s under pwsh versus ~2s (and up to ~13s on a busy
+ * machine, cold) under powershell.exe. `powershell.exe` is always present on
+ * Windows, so it is the fallback.
  */
-async function copyWindows(html: string, plainText: string): Promise<void> {
+let cachedPowerShell: string | undefined;
+
+const POWERSHELL_CANDIDATES = ['pwsh.exe', 'powershell.exe'];
+
+// A spawned host must load WinForms before it answers; cold that can take >10s.
+const HOST_READY_TIMEOUT_MS = 25000;
+// Once the host is ready a copy is a few tens of ms; the margin covers the
+// internal SetDataObject retry (10×150ms) and a busy machine.
+const COPY_TIMEOUT_MS = 10000;
+// The one-shot fallback spawns + loads WinForms fresh, so it needs the cold budget.
+const ONESHOT_TIMEOUT_MS = 25000;
+
+/**
+ * The PowerShell host resolved for clipboard writes (`'pwsh.exe'` or
+ * `'powershell.exe'`), or `undefined` if no write has run yet.
+ *
+ * A value of `'powershell.exe'` means PowerShell 7 (`pwsh`) was not found and
+ * the slower Windows PowerShell fallback was used — the caller can use this to
+ * suggest installing PowerShell 7.
+ */
+export function getWindowsPowerShellHost(): string | undefined {
+  return cachedPowerShell;
+}
+
+/**
+ * Copy HTML to the Windows clipboard via a persistent PowerShell host (see
+ * {@link WindowsClipboardHost}). The host loads System.Windows.Forms once and
+ * then serves each copy in a few tens of milliseconds instead of paying the
+ * ~1–2s assembly load on every copy. If the host cannot start (or dies), this
+ * falls back to a self-contained one-shot PowerShell run.
+ *
+ * When `mode` is `'oneShot'` the persistent host is skipped entirely and every
+ * copy spawns a fresh PowerShell (user-selectable via settings).
+ */
+async function copyWindows(html: string, plainText: string, mode: WindowsClipboardMode): Promise<void> {
   const cfHtml = buildCfHtml(html);
 
+  if (mode === 'oneShot') {
+    await copyWindowsOneShot(cfHtml, plainText);
+    return;
+  }
+
+  try {
+    await clipboardHost.copy(cfHtml, plainText);
+  } catch {
+    // Persistent host unavailable or failed — degrade to the proven one-shot
+    // path (spawns a fresh PowerShell per copy: slower, but self-contained).
+    await copyWindowsOneShot(cfHtml, plainText);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Persistent PowerShell clipboard host
+// ---------------------------------------------------------------------------
+
+/**
+ * Bootstrap for the persistent host. It loads WinForms once, prints `READY`,
+ * then serves one clipboard write per stdin line until stdin closes.
+ *
+ * Wire protocol (UTF-8, newline-delimited):
+ *   request  : "<id>|<cfHtmlBase64>|<plainBase64>"
+ *   response : "OK <id>"  or  "ERR <id> <message>"
+ *
+ * Payloads are base64 so a request is always one line and the CF_HTML bytes
+ * reach the clipboard verbatim (no temp files, no BOM, exact byte offsets).
+ * When the parent dies, stdin hits EOF and the loop exits on its own.
+ */
+const HOST_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -AssemblyName System.Windows.Forms
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 3
+}
+$enc = New-Object System.Text.UTF8Encoding($false)
+$stdin = New-Object System.IO.StreamReader([System.Console]::OpenStandardInput(), $enc)
+$stdout = New-Object System.IO.StreamWriter([System.Console]::OpenStandardOutput(), $enc)
+$stdout.AutoFlush = $true
+$stdout.WriteLine('READY')
+while ($true) {
+  $line = $stdin.ReadLine()
+  if ($null -eq $line) { break }
+  if ($line.Length -eq 0) { continue }
+  if ($line -eq 'EXIT') { break }
+  $parts = $line.Split('|')
+  $id = $parts[0]
+  try {
+    $htmlBytes = [System.Convert]::FromBase64String($parts[1])
+    $stream = New-Object System.IO.MemoryStream(,$htmlBytes)
+    $plain = $enc.GetString([System.Convert]::FromBase64String($parts[2]))
+    $dataObj = New-Object System.Windows.Forms.DataObject
+    $dataObj.SetData([System.Windows.Forms.DataFormats]::Html, $stream)
+    $dataObj.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $plain)
+    [System.Windows.Forms.Clipboard]::SetDataObject($dataObj, $true, 10, 150)
+    $stdout.WriteLine("OK $id")
+  } catch {
+    $msg = ($_.Exception.Message -replace '[\\r\\n]+', ' ')
+    $stdout.WriteLine("ERR $id $msg")
+  }
+}
+`;
+
+interface PendingCopy {
+  resolve: () => void;
+  reject: (err: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
+/**
+ * Manages a long-lived PowerShell process that keeps WinForms loaded and serves
+ * clipboard writes over stdin/stdout. Lazily started, restarted on death, and
+ * disposed on extension deactivate. Concurrent copies are matched by id, so the
+ * single channel serialises them safely.
+ */
+class WindowsClipboardHost {
+  private proc: ReturnType<typeof spawn> | undefined;
+  private startPromise: Promise<void> | undefined;
+  private stdoutBuffer = '';
+  private stderrTail = '';
+  private readonly pending = new Map<string, PendingCopy>();
+  private awaitingReady: { resolve: () => void; reject: (err: Error) => void } | undefined;
+
+  async copy(cfHtml: string, plainText: string): Promise<void> {
+    await this.ensureStarted();
+    const stdin = this.proc?.stdin;
+    if (!stdin) {
+      throw new Error('PowerShell clipboard host is not running.');
+    }
+
+    const id = randomBytes(4).toString('hex');
+    const cfB64 = Buffer.from(cfHtml, 'utf-8').toString('base64');
+    const plainB64 = Buffer.from(plainText, 'utf-8').toString('base64');
+
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        // The host may be wedged — drop it so the next copy starts fresh.
+        this.kill(new Error('Clipboard host timed out.'));
+        reject(new Error(`Clipboard write timed out after ${COPY_TIMEOUT_MS / 1000}s.`));
+      }, COPY_TIMEOUT_MS);
+
+      this.pending.set(id, { resolve, reject, timer });
+      try {
+        stdin.write(`${id}|${cfB64}|${plainB64}\n`);
+      } catch (err) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(err as Error);
+      }
+    });
+  }
+
+  dispose(): void {
+    if (this.proc?.stdin) {
+      try { this.proc.stdin.write('EXIT\n'); } catch { /* ignore */ }
+    }
+    this.kill();
+  }
+
+  private ensureStarted(): Promise<void> {
+    if (!this.startPromise) {
+      this.startPromise = this.start().catch((err) => {
+        this.startPromise = undefined;
+        throw err;
+      });
+    }
+    return this.startPromise;
+  }
+
+  private async start(): Promise<void> {
+    const candidates = cachedPowerShell ? [cachedPowerShell] : POWERSHELL_CANDIDATES;
+    let lastError: Error | undefined;
+    for (const exe of candidates) {
+      try {
+        await this.spawnHost(exe);
+        cachedPowerShell = exe;
+        return;
+      } catch (err) {
+        lastError = err as Error;
+        this.discardProc();
+      }
+    }
+    throw lastError ?? new Error('Could not start a PowerShell clipboard host.');
+  }
+
+  private spawnHost(exe: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const encoded = Buffer.from(HOST_SCRIPT, 'utf16le').toString('base64');
+      let proc: ReturnType<typeof spawn>;
+      try {
+        proc = spawn(
+          exe,
+          ['-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand', encoded],
+          { windowsHide: true }
+        );
+      } catch (err) {
+        reject(err as Error);
+        return;
+      }
+
+      this.proc = proc;
+      this.stdoutBuffer = '';
+      this.stderrTail = '';
+
+      const readyTimer = setTimeout(() => {
+        this.awaitingReady = undefined;
+        reject(new Error(`PowerShell host did not become ready within ${HOST_READY_TIMEOUT_MS / 1000}s.`));
+      }, HOST_READY_TIMEOUT_MS);
+
+      this.awaitingReady = {
+        resolve: () => { clearTimeout(readyTimer); resolve(); },
+        reject: (err) => { clearTimeout(readyTimer); reject(err); },
+      };
+
+      proc.stdout?.setEncoding('utf8');
+      proc.stdout?.on('data', (chunk: string) => this.onStdout(chunk));
+      proc.stderr?.setEncoding('utf8');
+      proc.stderr?.on('data', (chunk: string) => {
+        this.stderrTail = (this.stderrTail + chunk).slice(-500);
+      });
+
+      proc.on('error', (err: Error) => this.onProcExit(proc, err));
+      proc.on('exit', (code, signal) => this.onProcExit(proc, this.exitError(code, signal)));
+    });
+  }
+
+  private onStdout(chunk: string): void {
+    this.stdoutBuffer += chunk;
+    let nl: number;
+    while ((nl = this.stdoutBuffer.indexOf('\n')) >= 0) {
+      const line = this.stdoutBuffer.slice(0, nl).replace(/\r$/, '');
+      this.stdoutBuffer = this.stdoutBuffer.slice(nl + 1);
+      this.handleLine(line);
+    }
+  }
+
+  private handleLine(line: string): void {
+    if (line.length === 0) {
+      return;
+    }
+    if (this.awaitingReady && line === 'READY') {
+      const ready = this.awaitingReady;
+      this.awaitingReady = undefined;
+      ready.resolve();
+      return;
+    }
+    // "OK <id>" or "ERR <id> <message>"
+    const firstSpace = line.indexOf(' ');
+    const tag = firstSpace < 0 ? line : line.slice(0, firstSpace);
+    const rest = firstSpace < 0 ? '' : line.slice(firstSpace + 1);
+    if (tag === 'OK') {
+      this.settle(rest, undefined);
+    } else if (tag === 'ERR') {
+      const sep = rest.indexOf(' ');
+      const id = sep < 0 ? rest : rest.slice(0, sep);
+      const msg = sep < 0 ? 'Clipboard write failed.' : rest.slice(sep + 1);
+      this.settle(id, new Error(`Clipboard write failed: ${msg}`));
+    }
+  }
+
+  private settle(id: string, err: Error | undefined): void {
+    const pending = this.pending.get(id);
+    if (!pending) {
+      return;
+    }
+    this.pending.delete(id);
+    clearTimeout(pending.timer);
+    if (err) {
+      pending.reject(err);
+    } else {
+      pending.resolve();
+    }
+  }
+
+  private onProcExit(proc: ReturnType<typeof spawn>, err: Error): void {
+    if (this.proc !== proc) {
+      return;
+    }
+    if (this.awaitingReady) {
+      const ready = this.awaitingReady;
+      this.awaitingReady = undefined;
+      ready.reject(err);
+    }
+    this.failAll(err);
+    this.proc = undefined;
+    this.startPromise = undefined;
+  }
+
+  private failAll(err: Error): void {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(err);
+    }
+    this.pending.clear();
+  }
+
+  private exitError(code: number | null, signal: NodeJS.Signals | null): Error {
+    const detail = this.stderrTail.trim();
+    return new Error(
+      `PowerShell clipboard host exited (code ${code ?? 'null'}${signal ? `, signal ${signal}` : ''})` +
+      (detail ? `: ${detail}` : '')
+    );
+  }
+
+  private discardProc(): void {
+    const proc = this.proc;
+    if (!proc) {
+      return;
+    }
+    this.proc = undefined;
+    this.awaitingReady = undefined;
+    proc.removeAllListeners();
+    proc.stdout?.removeAllListeners();
+    proc.stderr?.removeAllListeners();
+    try { proc.kill(); } catch { /* ignore */ }
+  }
+
+  private kill(err?: Error): void {
+    if (err) {
+      this.failAll(err);
+    }
+    this.discardProc();
+    this.startPromise = undefined;
+  }
+}
+
+const clipboardHost = new WindowsClipboardHost();
+
+/** Stop the persistent clipboard host (call from the extension's deactivate). */
+export function disposeWindowsClipboardHost(): void {
+  clipboardHost.dispose();
+}
+
+// ---------------------------------------------------------------------------
+// One-shot fallback — a fresh PowerShell per copy (used if the host can't run)
+// ---------------------------------------------------------------------------
+
+async function copyWindowsOneShot(cfHtml: string, plainText: string): Promise<void> {
   const id = randomBytes(4).toString('hex');
   const cfHtmlFile = join(tmpdir(), `vscode-md-cf-${id}.txt`);
   const plainFile = join(tmpdir(), `vscode-md-plain-${id}.txt`);
 
-  // Write without BOM — Node.js writeFile('utf-8') does not add BOM
+  // Write without BOM — Node.js writeFile('utf-8') does not add BOM.
   await writeFile(cfHtmlFile, cfHtml, 'utf-8');
   await writeFile(plainFile, plainText, 'utf-8');
 
-  // Use forward slashes for PowerShell — .NET handles them fine on Windows
+  // Forward slashes are fine for .NET on Windows.
   const cfHtmlPath = cfHtmlFile.replace(/\\/g, '/');
   const plainPath = plainFile.replace(/\\/g, '/');
 
+  // $ErrorActionPreference + try/catch surface a real reason on stderr instead
+  // of an empty "Command failed". SetDataObject's 4-arg overload retries 10×.
   const psScript = `
-Add-Type -AssemblyName System.Windows.Forms
+$ErrorActionPreference = 'Stop'
+try {
+  Add-Type -AssemblyName System.Windows.Forms
 
-# Read CF_HTML as raw bytes (no BOM reinterpretation)
-$bytes = [System.IO.File]::ReadAllBytes('${cfHtmlPath}')
-$stream = New-Object System.IO.MemoryStream(,$bytes)
+  # Read CF_HTML as raw bytes (no BOM reinterpretation)
+  $bytes = [System.IO.File]::ReadAllBytes('${cfHtmlPath}')
+  $stream = New-Object System.IO.MemoryStream(,$bytes)
 
-$plain = [System.IO.File]::ReadAllText('${plainPath}', [System.Text.Encoding]::UTF8)
+  $plain = [System.IO.File]::ReadAllText('${plainPath}', [System.Text.Encoding]::UTF8)
 
-$dataObj = New-Object System.Windows.Forms.DataObject
-$dataObj.SetData([System.Windows.Forms.DataFormats]::Html, $stream)
-$dataObj.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $plain)
-[System.Windows.Forms.Clipboard]::SetDataObject($dataObj, $true)
+  $dataObj = New-Object System.Windows.Forms.DataObject
+  $dataObj.SetData([System.Windows.Forms.DataFormats]::Html, $stream)
+  $dataObj.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $plain)
+  [System.Windows.Forms.Clipboard]::SetDataObject($dataObj, $true, 10, 150)
+} catch {
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}
 `;
 
+  try {
+    await runPowerShellOneShot(psScript);
+  } finally {
+    await unlink(cfHtmlFile).catch(() => {});
+    await unlink(plainFile).catch(() => {});
+  }
+}
+
+/**
+ * Run a one-shot PowerShell script, preferring pwsh and falling back to
+ * powershell.exe. The chosen host is cached for subsequent calls.
+ */
+async function runPowerShellOneShot(script: string): Promise<void> {
+  const candidates = cachedPowerShell ? [cachedPowerShell] : POWERSHELL_CANDIDATES;
+
+  let lastError: Error | undefined;
+  for (const exe of candidates) {
+    try {
+      await execPowerShell(exe, script);
+      cachedPowerShell = exe;
+      return;
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      // pwsh missing → try the next candidate; any other error is real.
+      if (e.code === 'ENOENT') {
+        lastError = e;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError ?? new Error('No PowerShell host available.');
+}
+
+function execPowerShell(exe: string, script: string): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-STA', '-Command', psScript],
-      { timeout: 10000 },
-      async (error, _stdout, stderr) => {
-        await unlink(cfHtmlFile).catch(() => {});
-        await unlink(plainFile).catch(() => {});
-
-        if (error) {
-          reject(new Error(`Clipboard write failed: ${stderr || error.message}`));
-        } else {
+      exe,
+      ['-NoProfile', '-NonInteractive', '-STA', '-Command', script],
+      { timeout: ONESHOT_TIMEOUT_MS },
+      // error is ExecFileException (carries code/killed/signal); let TS infer it.
+      (error, _stdout, stderr) => {
+        if (!error) {
           resolve();
+          return;
         }
+        // Let ENOENT propagate so the caller can fall back to another host.
+        if (error.code === 'ENOENT') {
+          reject(error);
+          return;
+        }
+        if (error.killed || error.signal === 'SIGTERM') {
+          reject(new Error(`Clipboard write timed out after ${ONESHOT_TIMEOUT_MS / 1000}s.`));
+          return;
+        }
+        reject(new Error(`Clipboard write failed: ${stderr.trim() || error.message}`));
       }
     );
   });

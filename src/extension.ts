@@ -1,6 +1,18 @@
 import * as vscode from 'vscode';
 import { convertMarkdownToStyledHtml, type ConvertOptions } from './converter';
-import { copyHtmlToClipboard } from './clipboard';
+import {
+  copyHtmlToClipboard,
+  getWindowsPowerShellHost,
+  disposeWindowsClipboardHost,
+  type WindowsClipboardMode,
+} from './clipboard';
+
+const POWERSHELL7_HINT_KEY = 'copyMarkdownFormatted.powerShell7Suggested';
+
+function readWindowsClipboardMode(): WindowsClipboardMode {
+  const cfg = vscode.workspace.getConfiguration('copyMarkdownFormatted');
+  return cfg.get<WindowsClipboardMode>('windows.clipboardMode', 'persistentHost');
+}
 
 function readConvertOptions(): ConvertOptions {
   const cfg = vscode.workspace.getConfiguration('copyMarkdownFormatted');
@@ -41,7 +53,7 @@ function buildClipboardErrorMessage(err: unknown): string {
   return `Clipboard write failed. ${raw}`;
 }
 
-async function copyFormatted(text: string): Promise<void> {
+async function copyFormatted(text: string, context: vscode.ExtensionContext): Promise<void> {
   if (!text.trim()) {
     vscode.window.showWarningMessage('No text to copy.');
     return;
@@ -49,11 +61,43 @@ async function copyFormatted(text: string): Promise<void> {
 
   try {
     const html = convertMarkdownToStyledHtml(text, readConvertOptions());
-    await copyHtmlToClipboard(html, text);
+    await copyHtmlToClipboard(html, text, { windowsClipboardMode: readWindowsClipboardMode() });
     vscode.window.showInformationMessage('Formatted Markdown copied to clipboard.');
+    void maybeSuggestPowerShell7(context);
   } catch (err: unknown) {
     const message = buildClipboardErrorMessage(err);
     vscode.window.showErrorMessage(message);
+  }
+}
+
+/**
+ * On Windows, if the copy fell back to Windows PowerShell because PowerShell 7
+ * (`pwsh`) is not installed, show a one-time hint that installing it makes
+ * copies noticeably faster. Shown at most once per machine/profile.
+ */
+async function maybeSuggestPowerShell7(context: vscode.ExtensionContext): Promise<void> {
+  if (process.platform !== 'win32') {
+    return;
+  }
+  // 'powershell.exe' as the resolved host means pwsh was not found (ENOENT).
+  if (getWindowsPowerShellHost() !== 'powershell.exe') {
+    return;
+  }
+  if (context.globalState.get<boolean>(POWERSHELL7_HINT_KEY)) {
+    return;
+  }
+  // Mark as shown first, so the hint appears at most once even if dismissed.
+  await context.globalState.update(POWERSHELL7_HINT_KEY, true);
+
+  const installAction = 'How to install';
+  const choice = await vscode.window.showInformationMessage(
+    'Copy Markdown Formatted: PowerShell 7 (pwsh) was not found, so the slower Windows PowerShell is used. Installing PowerShell 7 makes clipboard copies about twice as fast.',
+    installAction
+  );
+  if (choice === installAction) {
+    await vscode.env.openExternal(vscode.Uri.parse(
+      'https://learn.microsoft.com/powershell/scripting/install/installing-powershell-on-windows'
+    ));
   }
 }
 
@@ -70,7 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.window.showWarningMessage('No text selected. Use "Copy File as Formatted HTML" to copy the entire file.');
         return;
       }
-      await copyFormatted(text);
+      await copyFormatted(text, context);
     }),
 
     vscode.commands.registerCommand('copyMarkdownFormatted.copyFile', async () => {
@@ -79,7 +123,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       const text = editor.document.getText();
-      await copyFormatted(text);
+      await copyFormatted(text, context);
     }),
 
     vscode.commands.registerCommand('copyMarkdownFormatted.openSettings', async () => {
@@ -87,8 +131,20 @@ export function activate(context: vscode.ExtensionContext): void {
         'workbench.action.openSettings',
         '@ext:ardimedia.copy-markdown-formatted'
       );
+    }),
+
+    // Free the background PowerShell host when the user switches to one-shot.
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (
+        e.affectsConfiguration('copyMarkdownFormatted.windows.clipboardMode') &&
+        readWindowsClipboardMode() === 'oneShot'
+      ) {
+        disposeWindowsClipboardHost();
+      }
     })
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void {
+  disposeWindowsClipboardHost();
+}

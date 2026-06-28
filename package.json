@@ -2,7 +2,7 @@
   "name": "copy-markdown-formatted",
   "displayName": "Copy Markdown Formatted",
   "description": "Copy Markdown as formatted HTML to clipboard — paste with full styling into Outlook, Teams, and other rich text editors.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "ardimedia",
   "license": "MIT",
   "repository": {
@@ -110,6 +110,24 @@
           "minimum": 6,
           "maximum": 32,
           "description": "Code font size in points (applies to inline code and fenced code blocks)."
+        },
+        "copyMarkdownFormatted.windows.clipboardMode": {
+          "type": "string",
+          "enum": [
+            "persistentHost",
+            "oneShot"
+          ],
+          "enumItemLabels": [
+            "Persistent host (fast)",
+            "One-shot per copy"
+          ],
+          "enumDescriptions": [
+            "Keep a background PowerShell process ready so copies after the first are near-instant. It loads the Windows clipboard support once and stays in memory until VS Code closes. Recommended.",
+            "Start a fresh PowerShell for every copy. No background process, but each copy pays the ~1–2s startup cost. Use this if the persistent process causes problems."
+          ],
+          "default": "persistentHost",
+          "markdownDescription": "How the clipboard write runs on **Windows**. `Persistent host` keeps a background PowerShell process ready so copies are near-instant; `One-shot per copy` starts a fresh PowerShell each time (slower, no background process). Ignored on macOS and Linux.",
+          "scope": "machine"
         }
       }
     }

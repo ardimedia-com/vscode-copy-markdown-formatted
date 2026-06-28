@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.4.0] - 2026-06-28
+
+- New: **persistent clipboard host on Windows (default)** — a background PowerShell process now stays ready between copies, loading the required `System.Windows.Forms` assembly once instead of on every copy. The first copy warms it up (~1–1.5s); subsequent copies are near-instant (~25–50ms). The process starts on first use, shuts down with VS Code, and self-exits if the editor closes without cleanup
+- New setting **`copyMarkdownFormatted.windows.clipboardMode`** (`persistentHost` | `oneShot`, default `persistentHost`): choose between the fast persistent host and starting a fresh PowerShell for every copy. Windows only
+- Fixed: copying on Windows could intermittently fail with `Clipboard write failed: Command failed: powershell.exe …` and no further detail. Root cause was the Windows PowerShell 5.1 `Add-Type System.Windows.Forms` cold-load occasionally exceeding the spawn timeout, so the process was killed before it finished — leaving an empty error message. Failures now surface the real reason (e.g. the clipboard being locked) instead of a blank `Command failed`
+- Changed: the clipboard copy now prefers PowerShell 7 (`pwsh`) when it is installed, falling back to Windows PowerShell (`powershell.exe`). Loading `System.Windows.Forms` is far cheaper under `pwsh` (~0.8s vs ~2s, and up to ~13s cold), which also keeps the one-shot fallback from tripping the timeout. The resolved host is cached for the session
+- Changed: CF_HTML and plain-text payloads are sent to the persistent host in-memory (base64 over stdin), eliminating the temporary files the previous one-shot path wrote and read on every copy
+- The clipboard write now retries on transient locks (other apps such as Teams, RDP, or clipboard managers briefly holding the clipboard) and uses a longer, clearer timeout that reports as a timeout rather than a generic failure
+- New: on Windows, when PowerShell 7 (`pwsh`) is not installed and the slower Windows PowerShell fallback is used, a one-time hint suggests installing PowerShell 7 for faster copies (with a link to the install docs). Shown at most once per machine/profile
+
 ## 0.3.1
 
 - Docs: README "Supported Elements" table now notes that `> Quote` may be stripped to normal paragraphs when the entire input is quoted (default `stripBlockquote` behavior introduced in 0.3.0)
