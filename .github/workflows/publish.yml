@@ -13,12 +13,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -40,6 +40,23 @@ jobs:
           fi
           echo "Version match: $PKG_VERSION"
 
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Capture the lines between "## [VERSION]" and the next "## " header.
+          # index()==1 matches the literal header prefix (no regex metachars).
+          awk -v hdr="## [$VERSION]" '
+            index($0, hdr) == 1 { capture=1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q "[^[:space:]]" release-notes.md; then
+            echo "::error::CHANGELOG.md has no entry for version $VERSION (expected a '## [$VERSION]' section)"
+            exit 1
+          fi
+          echo "----- release notes for $VERSION -----"
+          cat release-notes.md
+
       - name: Package VSIX
         run: npx vsce package
 
@@ -51,11 +68,11 @@ jobs:
           echo "Found VSIX: $VSIX_PATH"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           files: ${{ steps.vsix.outputs.path }}
-          generate_release_notes: true
+          body_path: release-notes.md
 
       - name: Publish to VS Code Marketplace
         run: npx vsce publish --packagePath ${{ steps.vsix.outputs.path }} --pat $VSCE_PAT
